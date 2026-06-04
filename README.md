@@ -46,7 +46,7 @@ Since this is not on the Chrome Web Store yet, install it manually:
 ### Whitelist
 ![Whitelist page](https://raw.githubusercontent.com/Mitravinda7/lockin/main/screenshots/whitelist.png)
 
-### Distraction blocked
+### breaktime
 ![Block alert](https://raw.githubusercontent.com/Mitravinda7/lockin/main/screenshots/breaktime.png)
 
 ## Tech stack
