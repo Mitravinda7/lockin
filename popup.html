@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LockIn</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+<div class="header">
+  <span class="logo">🔒 LockIn</span>
+  <div style="display:flex;gap:5px;align-items:center;">
+    <button id="stats-btn" style="background:#21262d;border:1px solid #30363d;color:#8b949e;padding:4px 9px;border-radius:6px;font-size:11px;cursor:pointer;">Stats</button>
+    <button id="whitelist-btn" style="background:#21262d;border:1px solid #30363d;color:#8b949e;padding:4px 9px;border-radius:6px;font-size:11px;cursor:pointer;">Allow</button>
+    <button id="schedule-btn" style="background:#21262d;border:1px solid #30363d;color:#8b949e;padding:4px 9px;border-radius:6px;font-size:11px;cursor:pointer;">Schedule</button>
+    <span class="status" id="status-badge">Inactive</span>
+  </div>
+</div>
+
+  <div id="setup-view">
+
+    <div class="section-label">Study duration</div>
+    <div class="duration-row">
+      <button class="dur-btn dur-time-btn selected" data-minutes="25">25m</button>
+      <button class="dur-btn dur-time-btn" data-minutes="50">50m</button>
+      <button class="dur-btn dur-time-btn" data-minutes="90">90m</button>
+      <button class="dur-btn dur-time-btn" data-minutes="120">2h</button>
+    </div>
+    <div class="custom-row">
+      <input type="number" id="custom-duration" placeholder="Custom (minutes)" min="1" max="480">
+    </div>
+
+    <div class="section-label" style="margin-top:14px;">Number of breaks allowed</div>
+    <div class="duration-row">
+      <button class="dur-btn break-count-btn" data-count="1">1</button>
+      <button class="dur-btn break-count-btn" data-count="2">2</button>
+      <button class="dur-btn break-count-btn selected" data-count="3">3</button>
+      <button class="dur-btn break-count-btn" data-count="4">4</button>
+    </div>
+
+    <div class="section-label" style="margin-top:14px;">Break duration</div>
+    <div class="duration-row">
+      <button class="dur-btn break-dur-btn" data-mins="1">1m</button>
+      <button class="dur-btn break-dur-btn" data-mins="2">2m</button>
+      <button class="dur-btn break-dur-btn selected" data-mins="3">3m</button>
+      <button class="dur-btn break-dur-btn" data-mins="4">4m</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="row-setting">
+  <span>Focus music</span>
+  <label class="toggle">
+    <input type="checkbox" id="music-toggle-session">
+    <span class="slider"></span>
+  </label>
+</div>
+
+<div id="music-style-picker" style="display:none; margin-top:10px;">
+  <div class="section-label">Music style</div>
+  <div class="duration-row">
+    <button class="dur-btn music-style-btn selected" data-style="lofi">Lo-fi</button>
+    <button class="dur-btn music-style-btn" data-style="nature">Nature</button>
+    <button class="dur-btn music-style-btn" data-style="focus">Deep Focus</button>
+  </div>
+</div>
+
+    <div class="divider"></div>
+
+    
+    <div class="divider"></div>
+
+    <div id="today-stats-bar" style="display:none;" class="today-stats">
+  <span class="today-label">📚</span>
+  <span class="today-value" id="today-mins-display">0 mins studied today</span>
+</div>
+
+    <button class="primary-btn" id="start-btn">Start Session</button>
+
+  </div>
+
+  <div id="session-view" style="display:none;">
+
+    <div class="timer-display" id="timer-display">00:00</div>
+    <div class="session-meta">Session active</div>
+
+    <div class="stats-bar">
+      <div class="stat-box studied">
+        <span class="stat-number" id="studied-mins">0</span>
+        <span class="stat-label">mins today</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-number" id="breaks-count">3</span>
+        <span class="stat-label">breaks left</span>
+      </div>
+      <div class="stat-box blocked">
+        <span class="stat-number" id="blocked-count">0</span>
+        <span class="stat-label">blocked</span>
+      </div>
+    </div>
+
+    <button class="break-btn" id="break-btn">Take emergency break</button>
+
+    <div class="divider"></div>
+
+    <div class="row-setting">
+      <span>Focus music</span>
+      <label class="toggle">
+        <input type="checkbox" id="music-toggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div id="music-style-picker-session" style="display:none; margin-top:10px;">
+      <div class="section-label">Music style</div>
+      <div class="duration-row">
+        <button class="dur-btn music-style-btn-session selected" data-style="lofi">Lo-fi</button>
+        <button class="dur-btn music-style-btn-session" data-style="nature">Nature</button>
+        <button class="dur-btn music-style-btn-session" data-style="focus">Deep Focus</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="break-view" style="display:none;">
+    <div class="break-icon">☕</div>
+    <div class="break-title">Break time</div>
+    <div class="break-timer" id="break-timer">0:00</div>
+    <div class="hint">Session resumes automatically</div>
+  </div>
+
+  <div id="completion-view" style="display:none;">
+    <div class="completion-icon">🎉</div>
+    <div class="completion-title">Session Complete!</div>
+    <div class="completion-sub" id="completion-sub">You studied 25 minutes</div>
+    <div class="today-stats">
+      <span class="today-label">Total today</span>
+      <span class="today-value" id="total-today">0 mins</span>
+    </div>
+    <div class="today-stats">
+      <span class="today-label">Distractions blocked</span>
+      <span class="today-value" style="color:#f85149" id="total-blocked">0</span>
+    </div>
+    <button class="primary-btn" id="new-session-btn" style="margin-top:8px;">Start New Session</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

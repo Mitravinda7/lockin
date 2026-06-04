@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LockIn — Whitelist</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0d1117;
+      background-image:
+        linear-gradient(rgba(56, 139, 253, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 139, 253, 0.03) 1px, transparent 1px);
+      background-size: 24px 24px;
+      color: #e6edf3;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .back-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .back-btn:hover { background: #30363d; }
+
+    h1 { font-size: 18px; font-weight: 600; }
+
+    .description {
+      font-size: 13px;
+      color: #7d8590;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    .add-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .add-row input {
+      flex: 1;
+      padding: 10px 14px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      color: #e6edf3;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .add-row input:focus { border-color: #1f6feb; }
+    .add-row input::placeholder { color: #484f58; }
+
+    .add-btn {
+      padding: 10px 18px;
+      background: #1f6feb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .add-btn:hover { background: #388bfd; }
+    .add-btn:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+
+    .warning-box {
+      background: #2d1f0d;
+      border: 1px solid #9e6a03;
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .warning-box.show { display: block; }
+
+    .warning-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #d29922;
+      margin-bottom: 6px;
+    }
+
+    .warning-text {
+      font-size: 12px;
+      color: #9e7a30;
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    .warning-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .confirm-btn {
+      padding: 7px 14px;
+      background: #d29922;
+      color: #0d1117;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .cancel-btn {
+      padding: 7px 14px;
+      background: transparent;
+      color: #7d8590;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .section-title {
+      font-size: 11px;
+      color: #7d8590;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+
+    .whitelist-container {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .whitelist-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .whitelist-item:last-child { border-bottom: none; }
+
+    .site-info { display: flex; flex-direction: column; gap: 2px; }
+
+    .site-domain {
+      font-size: 14px;
+      color: #e6edf3;
+      font-weight: 500;
+    }
+
+    .site-added {
+      font-size: 11px;
+      color: #484f58;
+    }
+
+    .remove-btn {
+      background: transparent;
+      border: 1px solid #30363d;
+      color: #f85149;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .remove-btn:hover { background: #2d1317; border-color: #f85149; }
+
+    .empty-state {
+      text-align: center;
+      padding: 32px;
+      color: #484f58;
+    }
+
+    .empty-state .icon { font-size: 32px; margin-bottom: 10px; }
+    .empty-state p { font-size: 13px; }
+
+    .checking-indicator {
+      font-size: 12px;
+      color: #7d8590;
+      margin-top: 8px;
+      display: none;
+    }
+
+    .checking-indicator.show { display: block; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <button class="back-btn" onclick="window.close()">← Back</button>
+    <h1>Whitelist</h1>
+  </div>
+
+  <p class="description">
+    Sites on this list are always allowed during study sessions. Use this for educational sites the AI might wrongly block — not for entertainment.
+  </p>
+
+  <div class="add-row">
+    <input type="text" id="site-input" placeholder="e.g. docs.python.org or coursera.org">
+    <button class="add-btn" id="add-btn">Add site</button>
+  </div>
+
+  <div class="checking-indicator" id="checking">🤔 Checking if this looks educational...</div>
+
+  <div class="warning-box" id="warning-box">
+    <div class="warning-title">⚠️ This might not be a study site</div>
+    <div class="warning-text" id="warning-text"></div>
+    <div class="warning-actions">
+      <button class="confirm-btn" id="confirm-btn">Add anyway</button>
+      <button class="cancel-btn" id="cancel-btn">Cancel</button>
+    </div>
+  </div>
+
+  <div class="section-title">Allowed sites</div>
+  <div class="whitelist-container" id="whitelist-container"></div>
+
+  <script src="whitelist.js"></script>
+</body>
+</html>

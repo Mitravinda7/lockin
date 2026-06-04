@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LockIn — Stats</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0d1117;
+      background-image:
+        linear-gradient(rgba(56, 139, 253, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 139, 253, 0.03) 1px, transparent 1px);
+      background-size: 24px 24px;
+      color: #e6edf3;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .back-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .back-btn:hover { background: #30363d; }
+
+    h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #e6edf3;
+    }
+
+    .summary-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .summary-card {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .summary-number {
+      font-size: 28px;
+      font-weight: 700;
+      color: #e6edf3;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .summary-number.green { color: #3fb950; }
+    .summary-number.red { color: #f85149; }
+    .summary-number.blue { color: #388bfd; }
+
+    .summary-label {
+      font-size: 11px;
+      color: #7d8590;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      color: #7d8590;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+
+    .chart-container {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      height: 140px;
+      margin-bottom: 8px;
+    }
+
+    .bar-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    .bar {
+      width: 100%;
+      background: #1f6feb;
+      border-radius: 4px 4px 0 0;
+      min-height: 2px;
+      transition: height 0.3s ease;
+      position: relative;
+    }
+
+    .bar.today { background: #3fb950; }
+    .bar.empty { background: #21262d; }
+
+    .bar-value {
+      font-size: 10px;
+      color: #7d8590;
+      text-align: center;
+    }
+
+    .bar-day {
+      font-size: 11px;
+      color: #7d8590;
+      text-align: center;
+    }
+
+    .bar-day.today { color: #3fb950; font-weight: 600; }
+
+    .chart-labels {
+      display: flex;
+      gap: 8px;
+    }
+
+    .day-logs {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .log-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .log-row:last-child { border-bottom: none; }
+
+    .log-date { font-size: 13px; color: #8b949e; }
+    .log-date.today { color: #e6edf3; font-weight: 600; }
+
+    .log-stats {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .log-mins {
+      font-size: 13px;
+      color: #3fb950;
+      font-weight: 600;
+    }
+
+    .log-blocked {
+      font-size: 12px;
+      color: #f85149;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #484f58;
+    }
+
+    .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <button class="back-btn" onclick="window.close()">← Back</button>
+    <h1>Study Stats</h1>
+  </div>
+
+  <div class="summary-row">
+    <div class="summary-card">
+      <span class="summary-number green" id="total-week-mins">0</span>
+      <span class="summary-label">Mins this week</span>
+    </div>
+    <div class="summary-card">
+      <span class="summary-number blue" id="total-sessions">0</span>
+      <span class="summary-label">Sessions</span>
+    </div>
+    <div class="summary-card">
+      <span class="summary-number red" id="total-blocked">0</span>
+      <span class="summary-label">Blocked</span>
+    </div>
+  </div>
+
+  <div class="chart-container">
+    <div class="section-title">Daily study minutes — last 7 days</div>
+    <div class="chart" id="chart"></div>
+    <div class="chart-labels" id="chart-labels"></div>
+  </div>
+
+  <div class="section-title">Day by day</div>
+  <div class="day-logs" id="day-logs"></div>
+
+  <script src="stats.js"></script>
+</body>
+</html>
