@@ -84,7 +84,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   const url = tab.url;
   if (url.startsWith("chrome://") || url.startsWith("chrome-extension://")) return;
   if (url.includes("claude.ai") || url.includes("blocked.html")) return;
-  if (url.includes("youtube.com") && !url.includes("youtube.com/watch")) return;
+  if (url.includes("youtube.com") && !url.includes("youtube.com/watch") && !url.includes("youtube.com/shorts")) return;
 
   if (changeInfo.status === "complete") {
     Object.keys(lastChecked).forEach(key => {
@@ -184,14 +184,14 @@ async function checkTab(tabId, title, url) {
             const el = document.getElementById("lockin-countdown");
             if (el) el.textContent = seconds;
             if (seconds <= 0) {
-              clearInterval(countdown);
-              window.close();
-            }
+  clearInterval(countdown);
+  chrome.runtime.sendMessage({ type: "CLOSE_TAB" });
+}
           }, 1000);
           document.getElementById("lockin-close").addEventListener("click", () => {
-            clearInterval(countdown);
-            window.close();
-          });
+  clearInterval(countdown);
+  chrome.runtime.sendMessage({ type: "CLOSE_TAB" });
+});
         },
         args: [reason]
       }).then(() => {
@@ -311,7 +311,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     if (!sender.tab) return;
     const url = message.url || "";
     if (url.includes("claude.ai") || url.includes("blocked.html") || url.startsWith("chrome")) return;
-    if (url.includes("youtube.com") && !url.includes("youtube.com/watch")) return;
+    if (url.includes("youtube.com") && !url.includes("youtube.com/watch") && !url.includes("youtube.com/shorts")) return;
     checkTab(sender.tab.id, message.title, url);
     return;
   }

@@ -79,7 +79,13 @@ function setupDurationButtons() {
       document.querySelectorAll(".dur-btn").forEach(b => b.classList.remove("selected"));
       btn.classList.add("selected");
       selectedDuration = parseInt(btn.dataset.mins);
+      document.getElementById("custom-schedule-duration").value = "";
     });
+  });
+
+  document.getElementById("custom-schedule-duration").addEventListener("input", (e) => {
+    document.querySelectorAll(".dur-btn").forEach(b => b.classList.remove("selected"));
+    selectedDuration = parseInt(e.target.value) || 25;
   });
 }
 

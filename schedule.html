@@ -356,14 +356,26 @@
   </div>
 
   <div class="form-row">
-    <label class="form-label">Duration</label>
-    <div class="duration-row">
-      <button class="dur-btn selected" data-mins="25">25m</button>
-      <button class="dur-btn" data-mins="50">50m</button>
-      <button class="dur-btn" data-mins="90">90m</button>
-      <button class="dur-btn" data-mins="120">2h</button>
-    </div>
+  <label class="form-label">Duration</label>
+  <div class="duration-row">
+    <button class="dur-btn selected" data-mins="25">25m</button>
+    <button class="dur-btn" data-mins="50">50m</button>
+    <button class="dur-btn" data-mins="90">90m</button>
+    <button class="dur-btn" data-mins="120">2h</button>
   </div>
+  <div style="margin-top:8px;">
+    <input type="number" id="custom-schedule-duration" placeholder="Custom minutes (e.g. 45 or 180)" min="1" max="480" style="
+      width:100%;
+      padding: 8px 12px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      font-size: 13px;
+      outline: none;
+    ">
+  </div>
+</div>
 
   <button class="add-schedule-btn" id="add-schedule-btn">Add Schedule</button>
 </div>
