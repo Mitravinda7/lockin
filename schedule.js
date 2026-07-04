@@ -32,7 +32,35 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // set min date to today for one-time picker
+    // recheck every 10 seconds in case session starts while page is open
+    setInterval(() => {
+      chrome.storage.local.get("session", (d) => {
+        if (d.session && d.session.active) {
+          document.body.innerHTML = `
+            <div style="
+              font-family: sans-serif;
+              background: #0d1117;
+              color: #e6edf3;
+              min-height: 100vh;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              text-align: center;
+              padding: 24px;
+              gap: 16px;
+            ">
+              <div style="font-size:52px">🔒</div>
+              <div style="font-size:20px;font-weight:600">Session in progress</div>
+              <div style="font-size:14px;color:#7d8590;max-width:300px;line-height:1.6">
+                You cannot edit schedules during an active study session. Stay focused.
+              </div>
+            </div>
+          `;
+        }
+      });
+    }, 10000);
+
     const today = new Date().toISOString().split("T")[0];
     document.getElementById("onetime-date").min = today;
     document.getElementById("onetime-date").value = today;
@@ -55,8 +83,6 @@ function switchType(type) {
   document.getElementById("type-recurring").classList.toggle("selected", type === "recurring");
   document.getElementById("type-onetime").classList.toggle("selected", type === "onetime");
 }
-
-
 
 function setupDayButtons() {
   document.querySelectorAll("[data-day]").forEach(btn => {
@@ -118,11 +144,6 @@ function setupAddButton() {
       const dateVal = document.getElementById("onetime-date").value;
       if (!dateVal) {
         alert("Please select a date.");
-        return;
-      }
-      const selectedDate = new Date(dateVal);
-      if (selectedDate < new Date(new Date().toDateString())) {
-        alert("Please select today or a future date.");
         return;
       }
       schedule.type = "onetime";

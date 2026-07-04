@@ -17,8 +17,8 @@ chrome.alarms.get("keepAlive", (alarm) => {
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "scheduleCheck") checkSchedules();
   if (alarm.name === "keepAlive") return;
+  if (alarm.name === "scheduleCheck") checkSchedules();
   if (alarm.name === "sessionEnd") endSession();
   if (alarm.name === "breakEnd") {
     session.onBreak = false;
@@ -108,7 +108,6 @@ async function checkTab(tabId, title, url) {
   const tabKey = `${tabId}:${url}`;
   if (lastChecked[tabKey]) return;
 
-  // check whitelist before setting cooldown
   const whitelistData = await chrome.storage.local.get("whitelist");
   const whitelist = whitelistData.whitelist || [];
   const isWhitelisted = whitelist.some(item => url.includes(item.domain));
@@ -184,14 +183,14 @@ async function checkTab(tabId, title, url) {
             const el = document.getElementById("lockin-countdown");
             if (el) el.textContent = seconds;
             if (seconds <= 0) {
-  clearInterval(countdown);
-  chrome.runtime.sendMessage({ type: "CLOSE_TAB" });
-}
+              clearInterval(countdown);
+              chrome.runtime.sendMessage({ type: "CLOSE_TAB" });
+            }
           }, 1000);
           document.getElementById("lockin-close").addEventListener("click", () => {
-  clearInterval(countdown);
-  chrome.runtime.sendMessage({ type: "CLOSE_TAB" });
-});
+            clearInterval(countdown);
+            chrome.runtime.sendMessage({ type: "CLOSE_TAB" });
+          });
         },
         args: [reason]
       }).then(() => {
@@ -228,7 +227,11 @@ function recheckAllTabs() {
 
 // ── schedule checker ─────────────────────────────────────────
 function registerScheduleAlarm() {
-  chrome.alarms.create("scheduleCheck", { periodInMinutes: 1 });
+  chrome.alarms.get("scheduleCheck", (alarm) => {
+    if (!alarm) {
+      chrome.alarms.create("scheduleCheck", { periodInMinutes: 1 });
+    }
+  });
 }
 
 registerScheduleAlarm();
@@ -270,8 +273,8 @@ function checkSchedules() {
         chrome.alarms.create("sessionEnd", { delayInMinutes: s.duration });
         recheckAllTabs();
         console.log("LockIn: scheduled session started");
+        chrome.runtime.sendMessage({ type: "SESSION_STARTED" }).catch(() => {});
 
-        // delete one-time schedule after it fires
         if (s.type === "onetime") {
           chrome.storage.local.get("schedules", (d) => {
             const updated = (d.schedules || []).filter(x => x.id !== s.id);
@@ -289,11 +292,11 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   if (message.type === "CLOSE_TAB") {
     if (sender.tab) chrome.tabs.remove(sender.tab.id);
     return;
-  
+  }
+
   if (message.type === "REGISTER_SCHEDULES") {
     registerScheduleAlarm();
     return;
-  }
   }
 
   if (message.type === "MUSIC_TOGGLE") {
@@ -365,7 +368,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     }
     return;
   }
-  });
+});
 
 // ── end session ──────────────────────────────────────────────
 function endSession() {
