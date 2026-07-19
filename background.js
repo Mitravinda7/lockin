@@ -108,6 +108,13 @@ async function checkTab(tabId, title, url) {
   const tabKey = `${tabId}:${url}`;
   if (lastChecked[tabKey]) return;
 
+  // skip internal chrome warmup and blank pages
+  if (title === "Warmup Page" || title === "" || url === "about:blank") return;
+
+  // always allow google search
+  if (url.includes("google.com/search")) return;
+  if (url.includes("google.com") && !url.includes("google.com/search") && url === "https://www.google.com/") return;
+
   const whitelistData = await chrome.storage.local.get("whitelist");
   const whitelist = whitelistData.whitelist || [];
   const isWhitelisted = whitelist.some(item => url.includes(item.domain));
@@ -315,6 +322,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     const url = message.url || "";
     if (url.includes("claude.ai") || url.includes("blocked.html") || url.startsWith("chrome")) return;
     if (url.includes("youtube.com") && !url.includes("youtube.com/watch") && !url.includes("youtube.com/shorts")) return;
+    if (url.includes("google.com/search")) return;
     checkTab(sender.tab.id, message.title, url);
     return;
   }
