@@ -89,6 +89,21 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
   });
+    // recheck session state every 5 seconds to catch scheduled sessions
+  setInterval(() => {
+    chrome.storage.local.get("session", (data) => {
+      const s = data.session;
+      if (s && s.active) {
+        const badge = document.getElementById("status-badge");
+        if (badge && badge.textContent === "Inactive") {
+          showSessionView();
+          startSessionTimer(s.startTime, s.duration);
+          document.getElementById("breaks-count").textContent =
+            s.maxBreaks - s.breaksUsed;
+        }
+      }
+    });
+  }, 5000);
 });
 
 // ── load today stats ─────────────────────────────────────

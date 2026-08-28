@@ -21,10 +21,12 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "scheduleCheck") checkSchedules();
   if (alarm.name === "sessionEnd") endSession();
   if (alarm.name === "breakEnd") {
-    session.onBreak = false;
-    saveSession();
-    chrome.runtime.sendMessage({ type: "BREAK_OVER" }).catch(() => {});
-    recheckAllTabs();
+    loadSessionFromStorage(() => {
+      session.onBreak = false;
+      saveSession();
+      chrome.runtime.sendMessage({ type: "BREAK_OVER" }).catch(() => {});
+      recheckAllTabs();
+    });
   }
 });
 
@@ -41,13 +43,41 @@ let session = {
 };
 
 let lastChecked = {};
+let sessionLoaded = false;
 
-chrome.storage.local.get("session", (data) => {
-  if (data && data.session) session = data.session;
-});
+// ── load session from storage ────────────────────────────────
+function loadSessionFromStorage(callback) {
+  chrome.storage.local.get("session", (data) => {
+    if (data && data.session) {
+      session = data.session;
+      if (session.active && session.startTime && session.duration) {
+        const endTime = session.startTime + session.duration * 60 * 1000;
+        if (Date.now() > endTime) {
+          session.active = false;
+          session.onBreak = false;
+          saveSession();
+          console.log("LockIn: cleared expired session on startup");
+        }
+      }
+    }
+    sessionLoaded = true;
+    if (callback) callback();
+  });
+}
+
+loadSessionFromStorage();
 
 function saveSession() {
   chrome.storage.local.set({ session });
+}
+
+// ── get session safely ───────────────────────────────────────
+function getSession(callback) {
+  if (sessionLoaded) {
+    callback(session);
+  } else {
+    loadSessionFromStorage(() => callback(session));
+  }
 }
 
 // ── offscreen document for audio ─────────────────────────────
@@ -78,42 +108,46 @@ async function stopMusicBackground() {
 
 // ── tab updated ──────────────────────────────────────────────
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (!session.active || session.onBreak) return;
-  if (!tab.url) return;
+  getSession((s) => {
+    if (!s.active || s.onBreak) return;
+    if (!tab.url) return;
 
-  const url = tab.url;
-  if (url.startsWith("chrome://") || url.startsWith("chrome-extension://")) return;
-  if (url.includes("claude.ai") || url.includes("blocked.html")) return;
-  if (url.includes("youtube.com") && !url.includes("youtube.com/watch") && !url.includes("youtube.com/shorts")) return;
+    const url = tab.url;
+    if (url.startsWith("chrome://") || url.startsWith("chrome-extension://")) return;
+    if (url.includes("claude.ai") || url.includes("blocked.html")) return;
+    if (url.includes("youtube.com") && !url.includes("youtube.com/watch") && !url.includes("youtube.com/shorts")) return;
+    if (url.includes("google.com/search")) return;
 
-  if (changeInfo.status === "complete") {
-    Object.keys(lastChecked).forEach(key => {
-      if (key.startsWith(tabId + ":")) delete lastChecked[key];
-    });
-    setTimeout(() => {
-      chrome.tabs.get(tabId, (freshTab) => {
-        if (chrome.runtime.lastError) return;
-        if (!freshTab || !freshTab.url) return;
-        checkTab(tabId, freshTab.title || "", freshTab.url);
+    if (changeInfo.status === "complete") {
+      Object.keys(lastChecked).forEach(key => {
+        if (key.startsWith(tabId + ":")) delete lastChecked[key];
       });
-    }, 4000);
-  }
+      setTimeout(() => {
+        chrome.tabs.get(tabId, (freshTab) => {
+          if (chrome.runtime.lastError) return;
+          if (!freshTab || !freshTab.url) return;
+          checkTab(tabId, freshTab.title || "", freshTab.url);
+        });
+      }, 4000);
+    }
+  });
 });
 
 // ── check a tab with AI ──────────────────────────────────────
 async function checkTab(tabId, title, url) {
-  if (!session.active || session.onBreak) return;
+  // always read fresh from storage to avoid race conditions
+  const stored = await chrome.storage.local.get("session");
+  const currentSession = stored.session || {};
+
+  if (!currentSession.active || currentSession.onBreak) return;
   if (!title || !url) return;
 
   const tabKey = `${tabId}:${url}`;
   if (lastChecked[tabKey]) return;
 
-  // skip internal chrome warmup and blank pages
   if (title === "Warmup Page" || title === "" || url === "about:blank") return;
-
-  // always allow google search
   if (url.includes("google.com/search")) return;
-  if (url.includes("google.com") && !url.includes("google.com/search") && url === "https://www.google.com/") return;
+  if (url.includes("google.com") && url === "https://www.google.com/") return;
 
   const whitelistData = await chrome.storage.local.get("whitelist");
   const whitelist = whitelistData.whitelist || [];
@@ -244,53 +278,56 @@ function registerScheduleAlarm() {
 registerScheduleAlarm();
 
 function checkSchedules() {
-  if (session.active) return;
+  chrome.storage.local.get("session", (sessionData) => {
+    const currentSession = sessionData.session || {};
+    if (currentSession.active) return;
 
-  chrome.storage.local.get("schedules", (data) => {
-    const schedules = (data.schedules || []).filter(s => s.enabled);
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
+    chrome.storage.local.get("schedules", (data) => {
+      const schedules = (data.schedules || []).filter(s => s.enabled);
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
 
-    for (const s of schedules) {
-      let shouldFire = false;
-
-      if (s.type === "onetime") {
-        const todayStr = now.toISOString().split("T")[0];
-        if (s.date === todayStr && s.hours === currentHour && s.minutes === currentMinute) {
-          shouldFire = true;
-        }
-      } else {
-        if (s.days.includes(now.getDay()) && s.hours === currentHour && s.minutes === currentMinute) {
-          shouldFire = true;
-        }
-      }
-
-      if (shouldFire) {
-        session.active = true;
-        session.startTime = Date.now();
-        session.duration = s.duration;
-        session.breaksUsed = 0;
-        session.maxBreaks = 3;
-        session.breakDuration = 3;
-        session.onBreak = false;
-        lastChecked = {};
-        saveSession();
-        chrome.alarms.clear("sessionEnd");
-        chrome.alarms.create("sessionEnd", { delayInMinutes: s.duration });
-        recheckAllTabs();
-        console.log("LockIn: scheduled session started");
-        chrome.runtime.sendMessage({ type: "SESSION_STARTED" }).catch(() => {});
+      for (const s of schedules) {
+        let shouldFire = false;
 
         if (s.type === "onetime") {
-          chrome.storage.local.get("schedules", (d) => {
-            const updated = (d.schedules || []).filter(x => x.id !== s.id);
-            chrome.storage.local.set({ schedules: updated });
-          });
+          const todayStr = now.toISOString().split("T")[0];
+          if (s.date === todayStr && s.hours === currentHour && s.minutes === currentMinute) {
+            shouldFire = true;
+          }
+        } else {
+          if (s.days.includes(now.getDay()) && s.hours === currentHour && s.minutes === currentMinute) {
+            shouldFire = true;
+          }
         }
-        break;
+
+        if (shouldFire) {
+          session.active = true;
+          session.startTime = Date.now();
+          session.duration = s.duration;
+          session.breaksUsed = 0;
+          session.maxBreaks = 3;
+          session.breakDuration = 3;
+          session.onBreak = false;
+          lastChecked = {};
+          saveSession();
+          chrome.alarms.clear("sessionEnd");
+          chrome.alarms.create("sessionEnd", { delayInMinutes: s.duration });
+          recheckAllTabs();
+          console.log("LockIn: scheduled session started");
+          chrome.runtime.sendMessage({ type: "SESSION_STARTED" }).catch(() => {});
+
+          if (s.type === "onetime") {
+            chrome.storage.local.get("schedules", (d) => {
+              const updated = (d.schedules || []).filter(x => x.id !== s.id);
+              chrome.storage.local.set({ schedules: updated });
+            });
+          }
+          break;
+        }
       }
-    }
+    });
   });
 }
 
@@ -317,13 +354,16 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   }
 
   if (message.type === "PAGE_CONTENT") {
-    if (!session.active || session.onBreak) return;
-    if (!sender.tab) return;
-    const url = message.url || "";
-    if (url.includes("claude.ai") || url.includes("blocked.html") || url.startsWith("chrome")) return;
-    if (url.includes("youtube.com") && !url.includes("youtube.com/watch") && !url.includes("youtube.com/shorts")) return;
-    if (url.includes("google.com/search")) return;
-    checkTab(sender.tab.id, message.title, url);
+    chrome.storage.local.get("session", (data) => {
+      const s = data.session || {};
+      if (!s.active || s.onBreak) return;
+      if (!sender.tab) return;
+      const url = message.url || "";
+      if (url.includes("claude.ai") || url.includes("blocked.html") || url.startsWith("chrome")) return;
+      if (url.includes("youtube.com") && !url.includes("youtube.com/watch") && !url.includes("youtube.com/shorts")) return;
+      if (url.includes("google.com/search")) return;
+      checkTab(sender.tab.id, message.title, url);
+    });
     return;
   }
 
@@ -344,21 +384,24 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   }
 
   if (message.type === "REQUEST_BREAK") {
-    if (session.breaksUsed >= session.maxBreaks) {
-      chrome.runtime.sendMessage({ type: "BREAK_DENIED" }).catch(() => {});
-      return;
-    }
-    const breakMins = session.breakDuration || 3;
-    session.onBreak = true;
-    session.breaksUsed++;
-    session.breakEndTime = Date.now() + breakMins * 60 * 1000;
-    saveSession();
-    chrome.runtime.sendMessage({
-      type: "BREAK_GRANTED",
-      breaksLeft: session.maxBreaks - session.breaksUsed
-    }).catch(() => {});
-    chrome.alarms.clear("breakEnd");
-    chrome.alarms.create("breakEnd", { delayInMinutes: breakMins });
+    chrome.storage.local.get("session", (data) => {
+      const s = data.session || {};
+      if (s.breaksUsed >= s.maxBreaks) {
+        chrome.runtime.sendMessage({ type: "BREAK_DENIED" }).catch(() => {});
+        return;
+      }
+      const breakMins = s.breakDuration || 3;
+      session.onBreak = true;
+      session.breaksUsed = s.breaksUsed + 1;
+      session.breakEndTime = Date.now() + breakMins * 60 * 1000;
+      saveSession();
+      chrome.runtime.sendMessage({
+        type: "BREAK_GRANTED",
+        breaksLeft: s.maxBreaks - session.breaksUsed
+      }).catch(() => {});
+      chrome.alarms.clear("breakEnd");
+      chrome.alarms.create("breakEnd", { delayInMinutes: breakMins });
+    });
     return;
   }
 
