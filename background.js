@@ -292,12 +292,14 @@ function checkSchedules() {
         let shouldFire = false;
 
         if (s.type === "onetime") {
-          const todayStr = now.toISOString().split("T")[0];
-          if (s.date === todayStr && s.hours === currentHour && s.minutes === currentMinute) {
-            shouldFire = true;
-          }
-        } else {
-          if (s.days.includes(now.getDay()) && s.hours === currentHour && s.minutes === currentMinute) {
+  const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const minuteDiff = Math.abs((currentHour * 60 + currentMinute) - (s.hours * 60 + s.minutes));
+if (s.date === localDate && minuteDiff <= 1) {
+    shouldFire = true;
+  }
+} else {
+          const minuteDiff = Math.abs((currentHour * 60 + currentMinute) - (s.hours * 60 + s.minutes));
+if (s.days.includes(now.getDay()) && minuteDiff <= 1) {
             shouldFire = true;
           }
         }
