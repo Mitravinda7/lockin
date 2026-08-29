@@ -26,6 +26,13 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       saveSession();
       chrome.runtime.sendMessage({ type: "BREAK_OVER" }).catch(() => {});
       recheckAllTabs();
+          // clean up firedSchedules from previous days
+    chrome.storage.local.get("firedSchedules", (d) => {
+      const today = new Date();
+      const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      const fired = (d.firedSchedules || []).filter(key => key.includes(localDate));
+      chrome.storage.local.set({ firedSchedules: fired });
+    });
     });
   }
 });
@@ -278,58 +285,70 @@ function registerScheduleAlarm() {
 registerScheduleAlarm();
 
 function checkSchedules() {
-  chrome.storage.local.get("session", (sessionData) => {
-    const currentSession = sessionData.session || {};
+  chrome.storage.local.get(["session", "schedules", "firedSchedules"], (data) => {
+    const currentSession = data.session || {};
     if (currentSession.active) return;
 
-    chrome.storage.local.get("schedules", (data) => {
-      const schedules = (data.schedules || []).filter(s => s.enabled);
-      const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
+    const schedules = (data.schedules || []).filter(s => s.enabled);
+    const firedSchedules = data.firedSchedules || [];
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const nowMins = currentHour * 60 + currentMinute;
 
-      for (const s of schedules) {
-        let shouldFire = false;
+    for (const s of schedules) {
+      const scheduleMins = s.hours * 60 + s.minutes;
+      const diff = nowMins - scheduleMins;
 
-        if (s.type === "onetime") {
-  const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const minuteDiff = Math.abs((currentHour * 60 + currentMinute) - (s.hours * 60 + s.minutes));
-if (s.date === localDate && minuteDiff <= 1) {
-    shouldFire = true;
-  }
-} else {
-          const minuteDiff = Math.abs((currentHour * 60 + currentMinute) - (s.hours * 60 + s.minutes));
-if (s.days.includes(now.getDay()) && minuteDiff <= 1) {
-            shouldFire = true;
-          }
-        }
+      // fire if within 0-2 minute window after scheduled time
+      if (diff < 0 || diff > 2) continue;
 
-        if (shouldFire) {
-          session.active = true;
-          session.startTime = Date.now();
-          session.duration = s.duration;
-          session.breaksUsed = 0;
-          session.maxBreaks = 3;
-          session.breakDuration = 3;
-          session.onBreak = false;
-          lastChecked = {};
-          saveSession();
-          chrome.alarms.clear("sessionEnd");
-          chrome.alarms.create("sessionEnd", { delayInMinutes: s.duration });
-          recheckAllTabs();
-          console.log("LockIn: scheduled session started");
-          chrome.runtime.sendMessage({ type: "SESSION_STARTED" }).catch(() => {});
+      // check if already fired today
+      const fireKey = `${s.id}_${localDate}`;
+      if (firedSchedules.includes(fireKey)) continue;
 
-          if (s.type === "onetime") {
-            chrome.storage.local.get("schedules", (d) => {
-              const updated = (d.schedules || []).filter(x => x.id !== s.id);
-              chrome.storage.local.set({ schedules: updated });
-            });
-          }
-          break;
-        }
+      // check date for one-time schedules
+      if (s.type === "onetime" && s.date !== localDate) continue;
+
+      // check day for recurring schedules
+      if (s.type === "recurring" && !s.days.includes(now.getDay())) continue;
+
+      // fire the session
+      session.active = true;
+      session.startTime = Date.now();
+      session.duration = s.duration;
+      session.breaksUsed = 0;
+      session.maxBreaks = 3;
+      session.breakDuration = 3;
+      session.onBreak = false;
+      lastChecked = {};
+      saveSession();
+      chrome.alarms.clear("sessionEnd");
+      chrome.alarms.create("sessionEnd", { delayInMinutes: s.duration });
+      recheckAllTabs();
+      console.log("LockIn: scheduled session started —", s.hours + ":" + s.minutes);
+      chrome.runtime.sendMessage({ type: "SESSION_STARTED" }).catch(() => {});
+
+      // mark as fired so it doesn't fire again today
+      firedSchedules.push(fireKey);
+      chrome.storage.local.set({ firedSchedules });
+
+      // delete one-time schedule after firing
+      if (s.type === "onetime") {
+        chrome.storage.local.get("schedules", (d) => {
+          const updated = (d.schedules || []).filter(x => x.id !== s.id);
+          chrome.storage.local.set({ schedules: updated });
+        });
       }
-    });
+
+      // clean up old fired keys (keep only last 50)
+      if (firedSchedules.length > 50) {
+        chrome.storage.local.set({ firedSchedules: firedSchedules.slice(-50) });
+      }
+
+      break;
+    }
   });
 }
 
