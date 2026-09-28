@@ -74,6 +74,74 @@ function loadSessionFromStorage(callback) {
 
 loadSessionFromStorage();
 
+function checkIfSessionShouldBeActive() {
+  chrome.storage.local.get(["schedules", "session", "firedSchedules"], (data) => {
+    const currentSession = data.session || {};
+    if (currentSession.active) return;
+
+    const schedules = (data.schedules || []).filter(s => s.enabled);
+    const firedSchedules = data.firedSchedules || [];
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const nowMins = currentHour * 60 + currentMinute;
+    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+    for (const s of schedules) {
+      const scheduleMins = s.hours * 60 + s.minutes;
+      const scheduleEndMins = scheduleMins + s.duration;
+
+      // check if we are currently within a scheduled session window
+      if (nowMins < scheduleMins || nowMins > scheduleEndMins) continue;
+
+      // check if already fired today
+      const fireKey = `${s.id}_${localDate}`;
+      if (firedSchedules.includes(fireKey)) continue;
+
+      // check date for one-time
+      if (s.type === "onetime" && s.date !== localDate) continue;
+
+      // check day for recurring
+      if (s.type === "recurring" && !s.days.includes(now.getDay())) continue;
+
+      // calculate how much time is left in this session
+      const elapsedMins = nowMins - scheduleMins;
+      const remainingMins = s.duration - elapsedMins;
+
+      if (remainingMins <= 0) continue;
+
+      // start session with remaining time
+      session.active = true;
+      session.startTime = Date.now() - (elapsedMins * 60 * 1000);
+      session.duration = s.duration;
+      session.breaksUsed = 0;
+      session.maxBreaks = 3;
+      session.breakDuration = 3;
+      session.onBreak = false;
+      lastChecked = {};
+      saveSession();
+      chrome.alarms.clear("sessionEnd");
+      chrome.alarms.create("sessionEnd", { delayInMinutes: remainingMins });
+      recheckAllTabs();
+      console.log(`LockIn: resuming scheduled session — ${remainingMins} mins remaining`);
+      chrome.runtime.sendMessage({ type: "SESSION_STARTED" }).catch(() => {});
+
+      firedSchedules.push(fireKey);
+      chrome.storage.local.set({ firedSchedules });
+
+      if (s.type === "onetime") {
+        chrome.storage.local.get("schedules", (d) => {
+          const updated = (d.schedules || []).filter(x => x.id !== s.id);
+          chrome.storage.local.set({ schedules: updated });
+        });
+      }
+      break;
+    }
+  });
+}
+
+checkIfSessionShouldBeActive();
+
 function saveSession() {
   chrome.storage.local.set({ session });
 }
