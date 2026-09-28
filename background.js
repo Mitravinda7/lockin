@@ -183,17 +183,20 @@ async function stopMusicBackground() {
 
 // ── tab updated ──────────────────────────────────────────────
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  getSession((s) => {
-    if (!s.active || s.onBreak) return;
-    if (!tab.url) return;
+  if (!tab.url) return;
 
-    const url = tab.url;
-    if (url.startsWith("chrome://") || url.startsWith("chrome-extension://")) return;
-    if (url.includes("claude.ai") || url.includes("blocked.html")) return;
-    if (url.includes("youtube.com") && !url.includes("youtube.com/watch") && !url.includes("youtube.com/shorts")) return;
-    if (url.includes("google.com/search")) return;
+  const url = tab.url;
+  if (url.startsWith("chrome://") || url.startsWith("chrome-extension://")) return;
+  if (url.includes("claude.ai") || url.includes("blocked.html")) return;
+  if (url.includes("youtube.com") && !url.includes("youtube.com/watch") && !url.includes("youtube.com/shorts")) return;
+  if (url.includes("google.com/search")) return;
 
-    if (changeInfo.status === "complete") {
+  if (changeInfo.status === "complete") {
+    // always read fresh session from storage
+    chrome.storage.local.get("session", (data) => {
+      const s = data.session || {};
+      if (!s.active || s.onBreak) return;
+
       Object.keys(lastChecked).forEach(key => {
         if (key.startsWith(tabId + ":")) delete lastChecked[key];
       });
@@ -204,8 +207,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
           checkTab(tabId, freshTab.title || "", freshTab.url);
         });
       }, 4000);
-    }
-  });
+    });
+  }
 });
 
 // ── check a tab with AI ──────────────────────────────────────
