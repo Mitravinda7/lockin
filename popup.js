@@ -8,7 +8,7 @@ let musicPlaying = false;
 let audioCtx = null;
 let musicNodes = [];
 let selectedMusicStyle = "lofi";
-let blockedCount = 0;
+
 
 // ── on popup open ────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
@@ -21,9 +21,10 @@ document.addEventListener("DOMContentLoaded", () => {
   setupStartButton();
   setupBreakButton();
   setupMusicToggles();
+    chrome.storage.onChanged.addListener(() => updateSessionStats());
+  setInterval(updateSessionStats, 30000);
 
   document.getElementById("new-session-btn").addEventListener("click", () => {
-    blockedCount = 0;
     showSetupView();
   });
 
@@ -73,10 +74,8 @@ document.addEventListener("DOMContentLoaded", () => {
         showCompletionView(dur);
       });
     }
-    if (message.type === "DISTRACTION_BLOCKED") {
-      blockedCount++;
-      const el = document.getElementById("blocked-count");
-      if (el) el.textContent = blockedCount;
+        if (message.type === "DISTRACTION_BLOCKED") {
+      updateSessionStats();
     }
     if (message.type === "SESSION_STARTED") {
       chrome.storage.local.get("session", (data) => {
@@ -108,16 +107,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ── load today stats ─────────────────────────────────────
 function loadTodayStats() {
-  chrome.storage.local.get(["todayMins", "todayDate"], (data) => {
-    const today = new Date().toDateString();
-    if (data.todayDate === today && data.todayMins > 0) {
-      const el = document.getElementById("today-stats-bar");
-      if (el) {
-        el.style.display = "flex";
-        document.getElementById("today-mins-display").textContent =
-          `${data.todayMins} mins studied today`;
-      }
+  const key = `stats_${new Date().toDateString()}`;
+  chrome.storage.local.get(key, (data) => {
+    const mins = data[key]?.mins || 0;
+    const el = document.getElementById("today-stats-bar");
+    if (el && mins > 0) {
+      el.style.display = "flex";
+      document.getElementById("today-mins-display").textContent =
+        `${mins} mins studied today`;
     }
+  });
+}
+
+function updateSessionStats() {
+  const key = `stats_${new Date().toDateString()}`;
+  chrome.storage.local.get([key, "session"], (data) => {
+    const stats = data[key] || { mins: 0, blocked: 0 };
+    const s = data.session;
+    let elapsed = 0;
+    if (s && s.active && s.startTime) {
+      elapsed = Math.min(Math.floor((Date.now() - s.startTime) / 60000), s.duration);
+    }
+    document.getElementById("studied-mins").textContent = stats.mins + elapsed;
+    document.getElementById("blocked-count").textContent = stats.blocked;
   });
 }
 
@@ -236,6 +248,7 @@ function setupStartButton() {
           breakDuration: selectedBreakDuration
         });
         showSessionView();
+          updateSessionStats();
         startSessionTimer(session.startTime, duration);
       });
     });
@@ -322,6 +335,7 @@ function showSessionView() {
   document.getElementById("completion-view").style.display = "none";
   document.getElementById("status-badge").textContent = "Active";
   document.getElementById("status-badge").className = "status active";
+  updateSessionStats();
 }
 
 function showBreakView(breaksLeft) {
@@ -350,21 +364,16 @@ function showCompletionView(duration) {
   document.getElementById("status-badge").textContent = "Done";
   document.getElementById("status-badge").className = "status active";
 
-  chrome.storage.local.get(["todayMins", "todayBlocked", "todayDate"], (data) => {
-    const today = new Date().toDateString();
-    let totalMins = duration;
-    let totalBlocked = blockedCount;
-
-    if (data.todayDate === today) {
-      totalMins += data.todayMins || 0;
-      totalBlocked += data.todayBlocked || 0;
-    }
-
-    chrome.storage.local.set({ todayMins: totalMins, todayBlocked: totalBlocked, todayDate: today });
-    document.getElementById("completion-sub").textContent = `You studied ${duration} minutes`;
-    document.getElementById("total-today").textContent = `${totalMins} mins`;
-    document.getElementById("total-blocked").textContent = totalBlocked;
-  });
+  // small delay so background.js finishes saving this session's stats first
+  setTimeout(() => {
+    const key = `stats_${new Date().toDateString()}`;
+    chrome.storage.local.get(key, (data) => {
+      const stats = data[key] || { mins: 0, blocked: 0 };
+      document.getElementById("completion-sub").textContent = `You studied ${duration} minutes`;
+      document.getElementById("total-today").textContent = `${stats.mins} mins`;
+      document.getElementById("total-blocked").textContent = stats.blocked;
+    });
+  }, 500);
 }
 
 // ── session timer ────────────────────────────────────────
