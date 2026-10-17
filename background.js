@@ -50,6 +50,7 @@ let session = {
 };
 
 let lastChecked = {};
+let lastAiCheck = {};
 let sessionLoaded = false;
 
 // ── load session from storage ────────────────────────────────
@@ -189,7 +190,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (url.startsWith("chrome://") || url.startsWith("chrome-extension://")) return;
   if (url.includes("claude.ai") || url.includes("blocked.html")) return;
   if (url.includes("youtube.com") && !url.includes("youtube.com/watch") && !url.includes("youtube.com/shorts")) return;
-  if (url.includes("google.com/search")) return;
+  
 
   if (changeInfo.status === "complete") {
     // always read fresh session from storage
@@ -220,14 +221,16 @@ function describeGoogleSearch(url) {
     let kind = "web search";
     if (u.searchParams.get("udm") === "50") kind = "AI Mode chat";
     else if (u.searchParams.get("tbm") === "isch" || u.searchParams.get("udm") === "2") kind = "image search";
+        if (kind === "AI Mode chat") return "Google AI Mode chat";
     return `Google ${kind} for: ${q}`;
   } catch (e) {
     return null;
   }
 }
+  
 
 // ── check a tab with AI ──────────────────────────────────────
-async function checkTab(tabId, title, url) {
+async function checkTab(tabId, title, url, pageText = "") {
   // always read fresh from storage to avoid race conditions
   const stored = await chrome.storage.local.get("session");
   const currentSession = stored.session || {};
@@ -235,8 +238,16 @@ async function checkTab(tabId, title, url) {
   if (!currentSession.active || currentSession.onBreak) return;
   if (!title || !url) return;
 
+    const isAiMode = url.includes("google.com/search") && url.includes("udm=50");
+      if (isAiMode && !pageText) return; // only the content.js path carries the chat text
   const tabKey = `${tabId}:${url}`;
-  if (lastChecked[tabKey]) return;
+  if (isAiMode) {
+    // the URL never changes in an AI chat, so recheck every 20 seconds instead
+    if (Date.now() - (lastAiCheck[tabId] || 0) < 20000) return;
+    lastAiCheck[tabId] = Date.now();
+  } else if (lastChecked[tabKey]) {
+    return;
+  }
 
   if (title === "Warmup Page" || title === "" || url === "about:blank") return;
     const searchDesc = describeGoogleSearch(url);
@@ -253,12 +264,13 @@ async function checkTab(tabId, title, url) {
 
   lastChecked[tabKey] = true;
   console.log("LockIn: checking —", title);
+    console.log("LockIn: AI text length:", isAiMode ? pageText.length : 0, "|", isAiMode ? pageText.slice(-80) : "");
 
   try {
     const response = await fetch("https://lockin-ai.houseeee888.workers.dev/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, url })
+            body: JSON.stringify({ title, url, text: isAiMode ? pageText : "" })
     });
 
     const result = await response.json();
@@ -268,7 +280,7 @@ async function checkTab(tabId, title, url) {
       if (result.code === 429) {
         console.log("LockIn: rate limited, will retry");
         delete lastChecked[tabKey];
-        setTimeout(() => checkTab(tabId, title, url), 60000);
+        setTimeout(() => checkTab(tabId, title, url, pageText), 60000);
       }
       return;
     }
@@ -469,8 +481,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       const url = message.url || "";
       if (url.includes("claude.ai") || url.includes("blocked.html") || url.startsWith("chrome")) return;
       if (url.includes("youtube.com") && !url.includes("youtube.com/watch") && !url.includes("youtube.com/shorts")) return;
-      if (url.includes("google.com/search")) return;
-      checkTab(sender.tab.id, message.title, url);
+            checkTab(sender.tab.id, message.title, url, message.text);
     });
     return;
   }

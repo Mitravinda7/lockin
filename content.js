@@ -29,11 +29,14 @@ function reportContent() {
 
   const bodyText = document.body ? document.body.innerText || "" : "";
 
+    const isAiChat = url.includes("google.com/search") && url.includes("udm=50");
+  const text = isAiChat ? bodyText.slice(-700) : bodyText.slice(0, 800);
+
   chrome.runtime.sendMessage({
     type: "PAGE_CONTENT",
     title,
     url,
-    text: bodyText.slice(0, 800)
+    text
   }).catch(() => {});
 }
 
