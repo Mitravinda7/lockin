@@ -211,6 +211,21 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
+function describeGoogleSearch(url) {
+  try {
+    const u = new URL(url);
+    if (!u.hostname.includes("google.") || u.pathname !== "/search") return null;
+    const q = u.searchParams.get("q");
+    if (!q) return null;
+    let kind = "web search";
+    if (u.searchParams.get("udm") === "50") kind = "AI Mode chat";
+    else if (u.searchParams.get("tbm") === "isch" || u.searchParams.get("udm") === "2") kind = "image search";
+    return `Google ${kind} for: ${q}`;
+  } catch (e) {
+    return null;
+  }
+}
+
 // ── check a tab with AI ──────────────────────────────────────
 async function checkTab(tabId, title, url) {
   // always read fresh from storage to avoid race conditions
@@ -224,7 +239,8 @@ async function checkTab(tabId, title, url) {
   if (lastChecked[tabKey]) return;
 
   if (title === "Warmup Page" || title === "" || url === "about:blank") return;
-  if (url.includes("google.com/search")) return;
+    const searchDesc = describeGoogleSearch(url);
+  if (searchDesc) title = searchDesc;
   if (url.includes("google.com") && url === "https://www.google.com/") return;
 
   const whitelistData = await chrome.storage.local.get("whitelist");
