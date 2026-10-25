@@ -1,23 +1,10 @@
 let pendingSite = null;
 
 document.addEventListener("DOMContentLoaded", () => {
-  // block editing during active session
   chrome.storage.local.get("session", (data) => {
     if (data.session && data.session.active) {
       document.body.innerHTML = `
-        <div style="
-          font-family: sans-serif;
-          background: #0d1117;
-          color: #e6edf3;
-          min-height: 100vh;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          padding: 24px;
-          gap: 16px;
-        ">
+        <div style="font-family:sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;gap:16px;">
           <div style="font-size:52px">🔒</div>
           <div style="font-size:20px;font-weight:600">Session in progress</div>
           <div style="font-size:14px;color:#7d8590;max-width:300px;line-height:1.6">
@@ -25,10 +12,11 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
         </div>
       `;
+      return;
     }
+    renderWhitelist();
+    setupAddButton();
   });
-  renderWhitelist();
-  setupAddButton();
 });
 
 function setupAddButton() {
@@ -41,7 +29,6 @@ function setupAddButton() {
     const raw = input.value.trim().toLowerCase();
     if (!raw) return;
 
-    // clean up the input
     const domain = raw
       .replace(/^https?:\/\//, "")
       .replace(/^www\./, "")
@@ -85,24 +72,18 @@ async function checkAndAdd(domain) {
     const response = await fetch("https://lockin-ai.houseeee888.workers.dev/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: domain,
-        url: `https://${domain}`
-      })
+      body: JSON.stringify({ title: domain, url: `https://${domain}` })
     });
 
     const result = await response.json();
-    const isEducational = result.answer === "YES";
 
-    if (isEducational) {
+    if (result.answer === "YES") {
       addToWhitelist(domain);
     } else {
       pendingSite = domain;
       showWarning(domain);
     }
-
   } catch (err) {
-    // if check fails just add it
     addToWhitelist(domain);
   }
 
@@ -111,10 +92,9 @@ async function checkAndAdd(domain) {
 }
 
 function showWarning(domain) {
-  const warningBox = document.getElementById("warning-box");
-  const warningText = document.getElementById("warning-text");
-  warningText.textContent = `"${domain}" looks like it might be entertainment or non-educational content. Are you sure you want to allow it during study sessions?`;
-  warningBox.classList.add("show");
+  document.getElementById("warning-text").textContent =
+    `"${domain}" looks like it might be entertainment or non-educational content. Are you sure you want to allow it during study sessions?`;
+  document.getElementById("warning-box").classList.add("show");
 }
 
 function hideWarning() {
@@ -128,9 +108,12 @@ function addToWhitelist(domain) {
       alert(`${domain} is already in your whitelist.`);
       return;
     }
-    list.push({ domain, addedAt: new Date().toLocaleDateString() });
+    const limitInput = document.getElementById("limit-input");
+    const limitMins = limitInput ? (parseInt(limitInput.value) || 0) : 0;
+    list.push({ domain, addedAt: new Date().toLocaleDateString(), limitMins });
     chrome.storage.local.set({ whitelist: list }, () => {
       document.getElementById("site-input").value = "";
+      if (limitInput) limitInput.value = "";
       renderWhitelist();
     });
   });
@@ -165,7 +148,7 @@ function renderWhitelist() {
       row.innerHTML = `
         <div class="site-info">
           <div class="site-domain">${item.domain}</div>
-          <div class="site-added">Added ${item.addedAt}</div>
+          <div class="site-added">Added ${item.addedAt} · ${item.limitMins ? item.limitMins + " min/day" : "no limit"}</div>
         </div>
         <button class="remove-btn" data-domain="${item.domain}">Remove</button>
       `;
