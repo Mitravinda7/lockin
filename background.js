@@ -63,6 +63,8 @@ let session = {
 
 let lastChecked = {};
 let lastAiCheck = {};
+let errorUntil = {};
+let aiCallTimes = [];
 let sessionLoaded = false;
 
 function loadSessionFromStorage(callback) {
@@ -320,21 +322,28 @@ async function checkTab(tabId, title, url, pageText = "") {
 
   if (!currentSession.active || currentSession.onBreak) return;
   if (!title || !url) return;
+  if (title === "Warmup Page" || url === "about:blank") return;
+  if (url === "https://www.google.com/") return;
 
   const isAiMode = url.includes("google.com/search") && url.includes("udm=50");
   if (isAiMode && !pageText) return;
+
   const tabKey = `${tabId}:${url}`;
+
+  // skip pages that recently failed
+  if (errorUntil[tabKey] && Date.now() < errorUntil[tabKey]) return;
+
+  // mark the page as "being checked" right away so parallel calls stop here
   if (isAiMode) {
     if (Date.now() - (lastAiCheck[tabId] || 0) < 20000) return;
     lastAiCheck[tabId] = Date.now();
-  } else if (lastChecked[tabKey]) {
-    return;
+  } else {
+    if (lastChecked[tabKey]) return;
+    lastChecked[tabKey] = true;
   }
 
-  if (title === "Warmup Page" || title === "" || url === "about:blank") return;
   const searchDesc = describeGoogleSearch(url);
   if (searchDesc) title = searchDesc;
-  if (url === "https://www.google.com/") return;
 
   // whitelist with optional daily limit
   const wlData = await chrome.storage.local.get(["whitelist", "wlUsage"]);
@@ -350,9 +359,20 @@ async function checkTab(tabId, title, url, pageText = "") {
     return;
   }
 
-  lastChecked[tabKey] = true;
+  // never send more than 12 AI requests per minute
+  const now = Date.now();
+  aiCallTimes = aiCallTimes.filter(t => now - t < 60000);
+  if (aiCallTimes.length >= 12) {
+    console.log("LockIn: too many AI requests, will retry shortly");
+    delete lastChecked[tabKey];
+    return;
+  }
+  aiCallTimes.push(now);
+
   console.log("LockIn: checking —", title);
-  console.log("LockIn: AI text length:", isAiMode ? pageText.length : 0, "|", isAiMode ? pageText.slice(-80) : "");
+  if (isAiMode) {
+    console.log("LockIn: AI text length:", pageText.length, "|", pageText.slice(-80));
+  }
 
   try {
     const response = await fetch("https://lockin-ai.houseeee888.workers.dev/", {
@@ -362,14 +382,12 @@ async function checkTab(tabId, title, url, pageText = "") {
     });
 
     const result = await response.json();
-    console.log("LockIn: decision for", title, "→", result.answer);
+    console.log("LockIn: decision for", title, "→", result.answer, result.error ? "| ERROR: " + result.error : "");
 
-    if (result.error) {
-      if (result.code === 429) {
-        console.log("LockIn: rate limited, will retry");
-        delete lastChecked[tabKey];
-        setTimeout(() => checkTab(tabId, title, url, pageText), 60000);
-      }
+    if (result.error || !result.answer) {
+      // let the page be checked again later, but wait first
+      delete lastChecked[tabKey];
+      errorUntil[tabKey] = Date.now() + (result.code === 429 ? 60000 : 30000);
       return;
     }
 
@@ -378,6 +396,8 @@ async function checkTab(tabId, title, url, pageText = "") {
     }
   } catch (err) {
     console.error("LockIn: worker error:", err);
+    delete lastChecked[tabKey];
+    errorUntil[tabKey] = Date.now() + 30000;
   }
 }
 
@@ -495,6 +515,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     session.breakDuration = message.breakDuration || 3;
     session.onBreak = false;
     lastChecked = {};
+    errorUntil = {};
     saveSession();
     chrome.alarms.clear("sessionEnd");
     chrome.alarms.create("sessionEnd", { delayInMinutes: message.duration });
